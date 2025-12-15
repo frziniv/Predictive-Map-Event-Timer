@@ -1,45 +1,60 @@
-# Predictive-Map-Event-Timer
-# PredictiveMapTimer.py
+# PredictiveMapTimer.py (Updated Implementation)
 
 import time
+import random
 
-# Define critical in-game events and their fixed recurrence intervals in seconds
-FIXED_EVENT_INTERVALS = {
-    "Global_Resource_Spawn": 180,  # Spawns every 3 minutes
-    "Mid_Map_Objective_Reset": 300, # Resets every 5 minutes
-    "Ultimate_Cooldown_Boost": 600  # Occurs every 10 minutes
+# Define critical in-game events with base interval and potential variance
+DYNAMIC_EVENT_DATA = {
+    "Global_Resource_Spawn": {"base_interval": 180, "variance": 15, "confidence": 0.95}, # Variance of +/- 15s
+    "Mid_Map_Objective_Reset": {"base_interval": 300, "variance": 30, "confidence": 0.70},
+    "Ultimate_Cooldown_Boost": {"base_interval": 600, "variance": 5, "confidence": 0.99}
 }
 
 class MapPredictor:
     def __init__(self, current_game_time_seconds: int):
         self.start_time = time.time() - current_game_time_seconds
     
-    def predict_next_occurrence(self, event_name: str) -> float:
+    def predict_next_occurrence_window(self, event_name: str) -> dict:
         """
-        Predicts the next precise time (in seconds from game start) an event will occur.
+        Predicts the next occurrence time window and confidence score.
         
         :param event_name: The name of the recurring event.
-        :returns: Predicted time in seconds from game start.
+        :returns: Dictionary with 'min_time', 'max_time', and 'confidence'.
         """
-        if event_name not in FIXED_EVENT_INTERVALS:
-            return -1.0
+        if event_name not in DYNAMIC_EVENT_DATA:
+            return {"min_time": -1, "max_time": -1, "confidence": 0.0}
             
-        interval = FIXED_EVENT_INTERVALS[event_name]
+        data = DYNAMIC_EVENT_DATA[event_name]
+        interval = data["base_interval"]
+        variance = data["variance"]
+        confidence = data["confidence"]
+
         elapsed_time = time.time() - self.start_time
         
-        # Calculate how many intervals have passed
+        # Calculate the base time for the next interval
         intervals_passed = int(elapsed_time / interval)
+        base_next_time = (intervals_passed + 1) * interval
         
-        # Predicted time is the start time of the next interval
-        next_occurrence_time = (intervals_passed + 1) * interval
+        # NEW: Calculate the prediction window
+        min_time = base_next_time - variance
+        max_time = base_next_time + variance
         
-        return next_occurrence_time
+        return {
+            "min_time": min_time, 
+            "max_time": max_time, 
+            "confidence": confidence
+        }
 
 # Example Usage
 if __name__ == "__main__":
     # Assume 120 seconds have passed in the game
     predictor = MapPredictor(120) 
     
-    # Next Resource Spawn (180 seconds interval)
-    resource_time = predictor.predict_next_occurrence("Global_Resource_Spawn")
-    print(f"Predicted Global Resource Spawn (from game start): {resource_time:.0f} seconds")
+    # Next Resource Spawn (180 seconds interval, +/- 15s variance)
+    resource_prediction = predictor.predict_next_occurrence_window("Global_Resource_Spawn")
+    
+    print("\n--- Next Global Resource Spawn Prediction ---")
+    print(f"Confidence Level: {resource_prediction['confidence']:.2f}")
+    print(f"Time Window (Min/Max from game start): {resource_prediction['min_time']:.0f}s to {resource_prediction['max_time']:.0f}s")
+    
+    # Now, the agent knows it must be positioned for a 30-second window (165s to 195s) with 95% certainty.
